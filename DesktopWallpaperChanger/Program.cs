@@ -1,15 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Security.Policy;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using DesktopWallpaperChanger.Properties;
 using IniParser;
 using Microsoft.WindowsAPICodePack.Dialogs;
+using NLog;
 
 namespace DesktopWallpaperChanger
 {
@@ -35,6 +30,7 @@ namespace DesktopWallpaperChanger
         private WallpaperChanger wc;
         public AppContext()
         {
+            SetupLogging();
             wc = new WallpaperChanger();
             trayIcon = new NotifyIcon()
             {
@@ -123,6 +119,15 @@ namespace DesktopWallpaperChanger
         private void CopyMapInfoToClipboard(object sender, EventArgs e)
         {
             Clipboard.SetText($"{wc.CurrentMapArtist} - {wc.CurrentMapTitle} by {wc.CurrentMapMapper}");
+        }
+
+        private void SetupLogging()
+        {
+            var config = new NLog.Config.LoggingConfiguration();
+            var logfile = new NLog.Targets.FileTarget("logfile") {FileName = $"{Directory.GetCurrentDirectory()}/logs.txt"};
+            config.AddRule(LogLevel.Debug, LogLevel.Fatal, logfile);
+
+            LogManager.Configuration = config;
         }
     }
 }

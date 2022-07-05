@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Windows.Forms;
-using System.Windows.Forms.VisualStyles;
 using Microsoft.Win32;
+using NLog;
 
 namespace DesktopWallpaperChanger
 {
@@ -23,6 +20,8 @@ namespace DesktopWallpaperChanger
         const int SPIF_SENDWININICHANGE = 0x02;
         //endstolen
 
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+        
         public string CurrentMapArtist;
         public string CurrentMapTitle;
         public string CurrentMapMapper;
@@ -32,18 +31,27 @@ namespace DesktopWallpaperChanger
             var osuDirectory = new DirectoryInfo((string)songsFolder);
             var directories = osuDirectory.GetDirectories();
             var isUpdated = false;
-            FileInfo[] mapFiles = null;
-            while (!isUpdated)
+            try
             {
-                var map = PickMap(directories);
-                mapFiles = map.GetFiles();
-                var bg = GetMapBackground(mapFiles);
-                if (bg == null)
-                    continue;
-                var result = SetWallpaper(bg);
-                isUpdated = result == 1;
+                while (!isUpdated)
+                {
+                    FileInfo[] osuFiles = GetMapFiles(directories);
+                    if (osuFiles.Length == 0)
+                        continue;
+                    var bg = GetMapBackground(osuFiles);
+                    if (bg == null)
+                        continue;
+                    var result = SetWallpaper(bg);
+                    isUpdated = result == 1;
+                    if (isUpdated)
+                        FillMapData(osuFiles);
+                }
             }
-            FillMapData(mapFiles);
+            catch (Exception e)
+            {
+                _log.Error(e.StackTrace);
+            }
+            
         }
         
         //stolen
@@ -60,24 +68,13 @@ namespace DesktopWallpaperChanger
                 );
         }
         //endstolen
-
-        private static FileInfo GetMapBackground(FileInfo[] mapFiles)
+        
+        private static FileInfo? GetMapBackground(FileInfo[] osuFiles)
         {
-            var pics = mapFiles.Where(file => file.Extension == ".png" || file.Extension == ".jpg" || file.Extension == ".jpeg").ToList();
-            
-            if (!pics.Any() || pics.Exists(file => file.Extension == ".osu"))
-            {
-                Console.WriteLine("List is empty");
-                return null;
-            }
-            
-            var wallpaperFile = pics[0];
-            foreach (var pic in pics)
-            {
-                if (pic.Length > wallpaperFile.Length)
-                    wallpaperFile = pic;
-            }
-            return wallpaperFile;
+            var rand = new Random();
+            var pointer = rand.Next(0, osuFiles.Length);
+            var osuFile = osuFiles[pointer];
+            return GetBackgroundPath(osuFile);
         }
 
         private static DirectoryInfo PickMap(DirectoryInfo[] directories)
@@ -85,6 +82,29 @@ namespace DesktopWallpaperChanger
             var dirCount = directories.Length;
             var rnd = new Random();
             return directories[rnd.Next(0, dirCount)];
+        }
+
+        private static FileInfo? GetBackgroundPath(FileInfo osuFile)
+        {
+            using (StreamReader sr = osuFile.OpenText())
+            {
+                string? line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    var match = Regex.Match(line, @"""(.+\.(?:png|jpg|PNG|JPG))""");
+                    if (match.Success)
+                        return new FileInfo($"{osuFile.DirectoryName}/{match.Groups[1].Value}");
+                }
+            }
+
+            return null;
+        }
+
+        private static FileInfo[] GetMapFiles(DirectoryInfo[] directories)
+        {
+            var map = PickMap(directories);
+            var mapFiles =  map.GetFiles();
+            return mapFiles.Where(file => file.Extension == ".osu").ToArray();
         }
 
         private void FillMapData(FileInfo[] mapFiles)
